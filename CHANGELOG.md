@@ -3,19 +3,42 @@
 所有重要变更都会在此文件中记录。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 本项目遵循 [语义化版本（Semantic Versioning）](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [1.2.0] - 2026-06-19
 
-### 新增
-- 待补充
+### ✨ 新增功能
 
-### 更改
-- 待补充
+- **模型路由优化引擎**：根据任务类型自动选择最优模型的决策引擎，支持 5 种路由策略（成本优先/速度优先/质量优先/均衡/自定义）
+- **任务分类器（TaskClassifier）**：基于关键词+正则的文本任务类型识别，支持 14 种任务类型（代码生成/Bug修复/重构/优化/代码审查/通用对话等）
+- **模型画像（ModelProfile）**：管理 10 个模型的画像数据（成本/延迟/11维能力评分），支持自定义模型
+- **路由规则引擎**：支持条件+策略+优先级的规则匹配，可针对特定场景配置专项路由策略
+- **前端模型路由页面**：4 个标签页（路由模拟/模型画像/路由规则/统计概览）
 
-### 修复
-- 待补充
+### 🔧 技术实现
 
-### 废弃
-- 待补充
+- `taskClassifier.ts` — 任务分类器，关键词+正则双层匹配，支持中文
+- `modelProfileService.ts` — 模型画像服务，10 个内置模型 + 自定义扩展
+- `routerService.ts` — 路由决策引擎，加权评分模型 + 5 种策略
+- `routes/router.ts` — RESTful 路由：路由模拟/模型管理/规则管理/统计/历史
+
+### 🔌 API 变更
+
+新增路由相关接口：
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| GET | `/api/router/models` | 获取所有模型画像 |
+| POST | `/api/router/models` | 新增自定义模型 |
+| PUT | `/api/router/models/:modelId` | 更新模型配置 |
+| GET | `/api/router/rules` | 获取路由规则 |
+| POST | `/api/router/rules` | 创建路由规则 |
+| PUT | `/api/router/rules/:id` | 更新规则 |
+| DELETE | `/api/router/rules/:id` | 删除规则 |
+| POST | `/api/router/route` | 执行路由决策 |
+| POST | `/api/router/simulate` | 模拟路由（含调试信息） |
+| POST | `/api/router/outcome` | 回填路由结果 |
+| GET | `/api/router/stats` | 路由统计 |
+| GET | `/api/router/history` | 路由历史 |
+| GET | `/api/router/task-types` | 任务类型列表 |
 
 ---
 
