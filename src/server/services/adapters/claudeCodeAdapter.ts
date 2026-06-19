@@ -47,6 +47,26 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     return this.lastDetectedPath;
   }
 
+  getCandidatePaths(): string[] {
+    const candidates: string[] = [];
+    if (process.platform === 'win32') {
+      candidates.push('%USERPROFILE%/.claude/code');
+      candidates.push('%USERPROFILE%/.claude/logs');
+      candidates.push('%APPDATA%/ClaudeCode/logs');
+      candidates.push('%APPDATA%/ClaudeCode');
+      candidates.push('%LOCALAPPDATA%/ClaudeCode/logs');
+    } else if (process.platform === 'darwin') {
+      candidates.push('~/.claude/code');
+      candidates.push('~/.claude/logs');
+      candidates.push('~/Library/Application Support/ClaudeCode/logs');
+    } else {
+      candidates.push('~/.claude/code');
+      candidates.push('~/.claude/logs');
+      candidates.push('~/.config/claude-code');
+    }
+    return candidates;
+  }
+
   async initialize(): Promise<void> {
     logger.info('[ClaudeCodeAdapter] 初始化中', { mode: this.config.mode });
     this.running = true;

@@ -125,6 +125,7 @@ function Settings() {
   const [adapters, setAdapters] = useState<Array<{
     toolType: string; name: string; version: string; enabled: boolean;
     mode: string; logPath: string | null; detectedPath: string | null;
+    candidatePaths: string[];
     lastCollectTime: number; totalCollected: number; lastError?: string;
     health: { status: 'healthy' | 'degraded' | 'unhealthy'; error?: string };
     metrics: { totalEvents: number; totalTokens: number; avgLatency: number; errorCount: number };
@@ -132,6 +133,9 @@ function Settings() {
   const [adapterLoading, setAdapterLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [lastCollectResult, setLastCollectResult] = useState<number | null>(null);
+  const [manualPathMap, setManualPathMap] = useState<Record<string, string>>({});
+  const [manualEventExpanded, setManualEventExpanded] = useState<Record<string, boolean>>({});
+  const [manualEventJson, setManualEventJson] = useState<Record<string, string>>({});
 
   async function loadAdapters() {
     setAdapterLoading(true);
@@ -186,6 +190,49 @@ function Settings() {
     } catch (error) {
       console.error('[Settings] 提交测试事件失败', error);
       toast.error('提交测试事件失败');
+    }
+  }
+
+  async function applyManualPath(toolType: string, path: string) {
+    if (!path.trim()) {
+      toast.error('请输入有效的目录路径');
+      return;
+    }
+    try {
+      const response = await api.post(`/api/adapters/${toolType}/config`, { logPath: path.trim() });
+      if (response && response.success) {
+        toast.success('目录已设置，正在扫描');
+        // 切换到自动模式
+        await api.post(`/api/adapters/${toolType}/config`, { mode: 'auto' });
+        // 立即触发一次采集
+        await api.post('/api/adapters/collect', {});
+        loadAdapters();
+      } else {
+        toast.error('设置失败');
+      }
+    } catch (error) {
+      console.error('[Settings] 设置目录失败', error);
+      toast.error('设置失败');
+    }
+  }
+
+  async function submitCustomEvent(toolType: string, jsonStr: string) {
+    try {
+      let payload;
+      try {
+        payload = JSON.parse(jsonStr);
+      } catch {
+        toast.error('JSON 格式错误');
+        return;
+      }
+      const response = await api.post(`/api/adapters/${toolType}/event`, payload);
+      if (response && response.success) {
+        toast.success('自定义事件已提交');
+        loadAdapters();
+      }
+    } catch (error) {
+      console.error('[Settings] 提交自定义事件失败', error);
+      toast.error('提交失败');
     }
   }
 
@@ -915,7 +962,7 @@ function Settings() {
               </div>
               <div className="about-row">
                 <span>许可证</span>
-                <span>MIT</span>
+                <span>Apache License 2.0</span>
               </div>
             </div>
 
@@ -975,8 +1022,13 @@ function Settings() {
                         {a.health.status === 'healthy' ? '✅ 正常' : a.health.status === 'degraded' ? '⚠️ 降级' : '❌ 异常'}
                       </span>
                     </div>
-                    <div><span style={{ color: 'var(--text-secondary)' }}>扫描目录：</span>
-                      <code style={{ fontSize: '0.8rem' }}>{a.detectedPath || '未找到'}</code>
+                    <div>
+                      <span style={{ color: 'var(--text-secondary)' }}>扫描目录：</span>
+                      {a.detectedPath ? (
+                        <code style={{ fontSize: '0.8rem' }}>{a.detectedPath}</code>
+                      ) : (
+                        <span style={{ color: 'var(--warning-color)', fontWeight: 600 }}>未找到 ⚠️</span>
+                      )}
                     </div>
                     {a.lastError && (
                       <div style={{ gridColumn: 'span 2', color: 'var(--warning-color)' }}>
@@ -989,6 +1041,114 @@ function Settings() {
                       </div>
                     )}
                   </div>
+
+                  {/* 未找到目录时的提示 + 候选路径 + 手动输入 */}
+                  {!a.detectedPath && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(243, 156, 18, 0.08)', border: '1px dashed rgba(243, 156, 18, 0.4)', borderRadius: '4px' }}>
+                      <div style={{ color: 'var(--warning-color)', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                        ⚠️ 未检测到可用日志目录。请确认以下默认路径是否存在，或在下方手动指定你的实际安装目录：
+                      </div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>
+                        <div style={{ marginBottom: '0.25rem' }}>常见默认路径示例：</div>
+                        {(a.candidatePaths || []).slice(0, 5).map((p, i) => (
+                          <div key={i} style={{ paddingLeft: '0.5rem', fontFamily: 'monospace', opacity: 0.9 }}>
+                            • {p}
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                        <input
+                          type="text"
+                          placeholder={`例如：D:/Trae/User/trae 或 D:/Tools/Cursor/logs`}
+                          value={manualPathMap[a.toolType] || ''}
+                          onChange={(e) => setManualPathMap({ ...manualPathMap, [a.toolType]: e.target.value })}
+                          style={{ flex: 1, padding: '0.45rem', borderRadius: '4px', background: 'var(--input-bg)', border: '1px solid var(--border-color)', color: 'var(--text-color)', fontSize: '0.85rem' }}
+                        />
+                        <button
+                          className="btn btn-primary"
+                          style={{ padding: '0.45rem 0.9rem', fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                          onClick={() => applyManualPath(a.toolType, manualPathMap[a.toolType] || '')}
+                        >
+                          确认目录
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 已设置目录：显示变更入口 */}
+                  {a.detectedPath && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <button
+                        className="btn btn-text"
+                        style={{ padding: 0, fontSize: '0.8rem' }}
+                        onClick={() => {
+                          setManualPathMap({ ...manualPathMap, [a.toolType]: a.detectedPath || '' });
+                        }}
+                      >
+                        🔧 修改目录路径
+                      </button>
+                      {manualPathMap[a.toolType] && manualPathMap[a.toolType] !== '' && (
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                          <input
+                            type="text"
+                            placeholder="新的目录路径"
+                            value={manualPathMap[a.toolType]}
+                            onChange={(e) => setManualPathMap({ ...manualPathMap, [a.toolType]: e.target.value })}
+                            style={{ flex: 1, padding: '0.4rem', borderRadius: '4px', background: 'var(--input-bg)', border: '1px solid var(--border-color)', color: 'var(--text-color)', fontSize: '0.8rem' }}
+                          />
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                            onClick={() => applyManualPath(a.toolType, manualPathMap[a.toolType])}
+                          >
+                            确认
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* 手动模式：事件提交表单 */}
+                  {a.mode === 'manual' && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'rgba(52, 152, 219, 0.08)', border: '1px dashed rgba(52, 152, 219, 0.4)', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>📡 手动模式 — 提交自定义事件数据</div>
+                        <button
+                          className="btn btn-text"
+                          style={{ padding: 0, fontSize: '0.8rem' }}
+                          onClick={() => setManualEventExpanded({ ...manualEventExpanded, [a.toolType]: !manualEventExpanded[a.toolType] })}
+                        >
+                          {manualEventExpanded[a.toolType] ? '收起' : '展开表单'}
+                        </button>
+                      </div>
+                      {manualEventExpanded[a.toolType] && (
+                        <div>
+                          <textarea
+                            placeholder={`{ "sessionId": "session-xxx", "modelId": "claude-sonnet-4", "tokenConsumption": { "input": 500, "output": 1200 }, "performance": { "latency": 1500, "ttft": 300 } }`}
+                            value={manualEventJson[a.toolType] || ''}
+                            onChange={(e) => setManualEventJson({ ...manualEventJson, [a.toolType]: e.target.value })}
+                            style={{ width: '100%', minHeight: '100px', padding: '0.5rem', borderRadius: '4px', background: 'var(--input-bg)', border: '1px solid var(--border-color)', color: 'var(--text-color)', fontSize: '0.8rem', fontFamily: 'monospace', resize: 'vertical' }}
+                          />
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                            <button
+                              className="btn btn-primary"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                              onClick={() => submitCustomEvent(a.toolType, manualEventJson[a.toolType] || '')}
+                            >
+                              提交事件
+                            </button>
+                            <button
+                              className="btn btn-text"
+                              style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                              onClick={() => submitTestEvent(a.toolType)}
+                            >
+                              插入测试事件
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
@@ -1013,9 +1173,11 @@ function Settings() {
                       <option value="auto">自动模式（扫描日志）</option>
                       <option value="manual">手动模式（API 提交）</option>
                     </select>
-                    <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }} onClick={() => submitTestEvent(a.toolType)}>
-                      ➕ 插入测试事件
-                    </button>
+                    {a.mode !== 'manual' && (
+                      <button className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.85rem' }} onClick={() => submitTestEvent(a.toolType)}>
+                        ➕ 插入测试事件
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

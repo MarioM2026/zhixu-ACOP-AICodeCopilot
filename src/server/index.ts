@@ -9,6 +9,7 @@ import { healthRoutes } from './routes/health';
 import { alertRoutes } from './routes/alerts';
 import { adapterRoutes } from './routes/adapters';
 import routerRoutes from './routes/router';
+import contextRoutes from './routes/context';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './services/logger';
 import { startScheduler, getSchedulerStatus, triggerManualScan } from './services/scheduler';
@@ -18,6 +19,7 @@ import { ClaudeCodeAdapter } from './services/adapters/claudeCodeAdapter';
 import { CursorAdapter } from './services/adapters/cursorAdapter';
 import { routerService } from './services/routerService';
 import { modelProfileService } from './services/modelProfileService';
+import { contextManagerService } from './services/contextManagerService';
 import * as aiCodeEventService from './services/aiCodeEventService';
 import * as alertService from './services/alertService';
 import * as ruleService from './services/ruleService';
@@ -49,6 +51,7 @@ app.use('/api/rules', ruleRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/adapters', adapterRoutes);
 app.use('/api/router', routerRoutes);
+app.use('/api/context', contextRoutes);
 
 // Scheduler API
 app.get('/api/scheduler/status', (_req, res) => {
@@ -74,10 +77,12 @@ async function startup() {
   await ruleService.loadFromStorage();
   await routerService.initialize();
   await modelProfileService.initialize();
+  await contextManagerService.initialize();
   startScheduler();
   adapterService.register(new TraeAdapter({ name: 'Trae 适配器', version: '1.2.0', enabled: true, mode: 'auto' }));
   adapterService.register(new ClaudeCodeAdapter({ name: 'Claude Code 适配器', version: '1.2.0', enabled: true, mode: 'auto' }));
   adapterService.register(new CursorAdapter({ name: 'Cursor 适配器', version: '1.2.0', enabled: true, mode: 'auto' }));
+  await adapterService.loadConfigs();
   await adapterService.initializeAll();
 }
 

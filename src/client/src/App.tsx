@@ -4,6 +4,7 @@ import Events from './pages/Events';
 import Rules from './pages/Rules';
 import Settings from './pages/Settings';
 import ModelRouting from './pages/ModelRouting';
+import ContextManagement from './pages/ContextManagement';
 import Layout from './components/Layout';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
           <Route path="rules" element={<Rules />} />
           <Route path="settings" element={<Settings />} />
           <Route path="router" element={<ModelRouting />} />
+          <Route path="context" element={<ContextManagement />} />
         </Route>
       </Routes>
     </BrowserRouter>

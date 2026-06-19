@@ -2,6 +2,7 @@
   "name": "zhixu-acop",
   "version": "1.0.0",
   "description": "知墟 - AI 编程助手观测与优化平台 (ZhiXu - AI Code Copilot Observability Platform)",
+  "license": "Apache-2.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",

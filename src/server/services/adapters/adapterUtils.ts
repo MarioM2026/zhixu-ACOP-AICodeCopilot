@@ -47,24 +47,36 @@ function safeReadFile(filePath: string, maxBytes: number = 5 * 1024 * 1024): str
 
 export function listLogFiles(dir: string, maxFiles: number = 15): string[] {
   try {
-    const files = fs.readdirSync(dir)
-      .map((f) => path.join(dir, f))
-      .filter((p) => {
-        try {
-          const stat = fs.statSync(p);
-          return stat.isFile();
-        } catch {
-          return false;
+    function collectRecursive(currentDir: string, depth: number): string[] {
+      if (depth > 4) return []; // 避免无限递归
+      const result: string[] = [];
+      try {
+        const items = fs.readdirSync(currentDir);
+        for (const item of items) {
+          const fullPath = path.join(currentDir, item);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isDirectory()) {
+              result.push(...collectRecursive(fullPath, depth + 1));
+            } else if (stat.isFile() && item.endsWith('.log')) {
+              result.push(fullPath);
+            }
+          } catch (e) {} // 权限问题等跳过
         }
-      })
+      } catch (e) {}
+      return result;
+    }
+
+    const files = collectRecursive(dir, 0);
+    return files
       .sort((a, b) => {
         try {
           return fs.statSync(b).mtime.getTime() - fs.statSync(a).mtime.getTime();
         } catch {
           return 0;
         }
-      });
-    return files.slice(0, maxFiles);
+      })
+      .slice(0, maxFiles);
   } catch {
     return [];
   }
@@ -205,6 +217,114 @@ function extractEventFromTextLine(line: string, toolType: ToolType, defaultModel
 }
 
 /**
+ * 专门解析 Trae AI Agent 的 Rust tracing 格式日志
+ * 从 ai-agent_*_stdout.log 中提取 session_id、trace_id、duration、model 等信息
+ */
+export function parseTraeLog(content: string, defaultModel: string): AICodeEvent[] {
+  const events: AICodeEvent[] = [];
+  if (!content || content.trim().length === 0) return events;
+
+  // 按 session_id 聚合信息
+  const sessionInfo: Record<string, {
+    timestamps: number[];
+    traceIds: string[];
+    durations: number[];
+    modelNames: string[];
+    lineCount: number;
+  }> = {};
+
+  const lines = content.split(/\r?\n/).filter((l) => l.trim().length > 0);
+
+  for (const line of lines) {
+    // 1. 提取 timestamp (开头 ISO 格式)
+    const timeMatch = line.match(/^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:?\d{2}|Z)?)/);
+    const timestamp = timeMatch ? new Date(timeMatch[1]).getTime() : Date.now();
+
+    // 2. 提取 session_id (格式: session_id: Some("xxx") 或 session_id="xxx")
+    // 要求 session_id 至少 8 个字符，过滤掉 "ai"/"code" 等短关键字
+    const sessionMatch = line.match(/session_id(?:\s*:\s*|\s*=\s*)(?:Some\("([^"]+)"|Some\(\s*"([^"]+)"|"?([A-Za-z0-9\-]+)"?)/);
+    const sessionId = sessionMatch ? (sessionMatch[1] || sessionMatch[2] || sessionMatch[3]) : null;
+
+    if (!sessionId || sessionId.toLowerCase() === 'none' || sessionId.length < 8) continue;
+
+    // 3. 提取 trace_id
+    const traceMatch = line.match(/trace_id(?:\s*[:=]\s*)"?([A-Za-z0-9\-]+)"?/);
+    const traceId = traceMatch ? traceMatch[1] : null;
+
+    // 4. 提取 duration (格式: total_duration=116.5981ms 或 duration_ms:0)
+    const durationMatch = line.match(/(?:total_duration|duration|latency|time_cost)[^\d]*(\d+(?:\.\d+)?)\s*(ms|ns|μs|us|s)?/i);
+    let durationMs = 0;
+    if (durationMatch) {
+      const raw = parseFloat(durationMatch[1]);
+      const unit = (durationMatch[2] || 'ms').toLowerCase();
+      if (unit === 'ns') durationMs = raw / 1000000;
+      else if (unit === 'us' || unit === 'μs') durationMs = raw / 1000;
+      else if (unit === 's') durationMs = raw * 1000;
+      else durationMs = raw; // ms
+    }
+
+    // 5. 提取 model_name
+    const modelMatch = line.match(/model_name(?:\s*:\s*|\s*=\s*)"?([^",}\]\s]+)"?/);
+    const modelName = modelMatch ? modelMatch[1] : null;
+
+    // 聚合到 session
+    if (!sessionInfo[sessionId]) {
+      sessionInfo[sessionId] = { timestamps: [], traceIds: [], durations: [], modelNames: [], lineCount: 0 };
+    }
+    sessionInfo[sessionId].timestamps.push(timestamp);
+    sessionInfo[sessionId].lineCount++;
+    if (traceId) sessionInfo[sessionId].traceIds.push(traceId);
+    if (durationMs > 0) sessionInfo[sessionId].durations.push(durationMs);
+    if (modelName) sessionInfo[sessionId].modelNames.push(modelName);
+  }
+
+  // 为每个 session 生成事件
+  for (const [sessionId, info] of Object.entries(sessionInfo)) {
+    // 跳过太短/可能噪声的 session
+    if (info.lineCount < 5) continue;
+
+    const minTime = Math.min(...info.timestamps);
+    const maxTime = Math.max(...info.timestamps);
+    const avgDuration = info.durations.length > 0
+      ? Math.round(info.durations.reduce((s, x) => s + x, 0) / info.durations.length)
+      : Math.max(100, Math.round((maxTime - minTime) / Math.max(info.lineCount, 1)));
+
+    // 估算 token: 基于 traceId 数量（每次 AI 调用会有一个 traceId）和 duration
+    // 一个 traceId ≈ 一次 AI 调用，典型值 800-3000 tokens
+    const callCount = Math.max(1, info.traceIds.length);
+    const tokensPerCall = Math.max(400, Math.min(3000, 500 + avgDuration));
+    const estimatedTokens = Math.min(5000, callCount * tokensPerCall);
+    const inputTokens = Math.round(estimatedTokens * 0.6);
+    const outputTokens = Math.round(estimatedTokens * 0.4);
+
+    // 选择最常见的模型
+    const model = info.modelNames.length > 0
+      ? info.modelNames[0]
+      : defaultModel;
+
+    events.push({
+      id: uuidv4(),
+      tool: 'trae',
+      sessionId,
+      traceId: info.traceIds.length > 0 ? info.traceIds[0] : sessionId,
+      modelId: model,
+      timestamp: maxTime,
+      tokenConsumption: {
+        input: inputTokens,
+        output: outputTokens,
+        total: inputTokens + outputTokens,
+      },
+      performance: {
+        latency: avgDuration,
+        ttft: Math.round(avgDuration * 0.3),
+      },
+    });
+  }
+
+  return events;
+}
+
+/**
  * 扫描单个目录中的所有文件，提取事件
  */
 export function scanDirectoryForEvents(
@@ -218,7 +338,7 @@ export function scanDirectoryForEvents(
 
   if (!fs.existsSync(dir)) return events;
 
-  const files = listLogFiles(dir, 10);
+  const files = listLogFiles(dir, 15); // 增加到 15 个（之前是 10）
   for (const filePath of files) {
     if (events.length >= maxEventsPerRun) break;
 
@@ -229,15 +349,35 @@ export function scanDirectoryForEvents(
 
       if (!isNew && stat.size <= lastSize) continue;
 
-      const content = safeReadFile(filePath);
+      let content: string | null = null;
+      if (isNew) {
+        // 新文件：读取全部内容（最多 10MB）
+        content = safeReadFile(filePath, 10 * 1024 * 1024);
+      } else {
+        // 已有文件：仅读取新增部分
+        const increment = stat.size - lastSize;
+        const fd = fs.openSync(filePath, 'r');
+        const buf = Buffer.alloc(Math.min(increment, 5 * 1024 * 1024));
+        const bytesRead = fs.readSync(fd, buf, 0, buf.length, lastSize);
+        fs.closeSync(fd);
+        content = bytesRead > 0 ? buf.toString('utf8', 0, bytesRead) : '';
+      }
       if (content === null || content.length === 0) continue;
 
-      // 如果文件内容小于上次处理大小，忽略（避免重新扫）
-      const parsedEvents = parseGenericContent(content, toolType, defaultModel);
+      // Trae 的 ai-agent stdout 日志用专用解析器，其他用通用解析器
+      let parsedEvents: AICodeEvent[] = [];
+      const fileName = path.basename(filePath).toLowerCase();
+      if (fileName.includes('ai-agent') || fileName.includes('trae') || fileName.includes('chat_turn')) {
+        parsedEvents = parseTraeLog(content, defaultModel);
+      }
+      // 也尝试用通用解析器（如果是 JSON/JSONL 格式）
+      if (parsedEvents.length === 0) {
+        parsedEvents = parseGenericContent(content, toolType, defaultModel);
+      }
+
       processedMap[filePath] = stat.size;
 
       if (parsedEvents.length > 0) {
-        // 去重：根据 timestamp + model + tokenConsumption 粗略判断
         for (const ev of parsedEvents) {
           if (events.length >= maxEventsPerRun) break;
           events.push(ev);

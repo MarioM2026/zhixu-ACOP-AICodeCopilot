@@ -47,6 +47,27 @@ export class CursorAdapter implements AgentAdapter {
     return this.lastDetectedPath;
   }
 
+  getCandidatePaths(): string[] {
+    const candidates: string[] = [];
+    if (process.platform === 'win32') {
+      candidates.push('%APPDATA%/Cursor/User/globalStorage/true-cursor.cursor');
+      candidates.push('%APPDATA%/Cursor/User/globalStorage');
+      candidates.push('%APPDATA%/Cursor');
+      candidates.push('%APPDATA%/Code/User/globalStorage/true-cursor.cursor');
+      candidates.push('%USERPROFILE%/.cursor');
+      candidates.push('%LOCALAPPDATA%/Cursor');
+    } else if (process.platform === 'darwin') {
+      candidates.push('~/Library/Application Support/Cursor/User/globalStorage/true-cursor.cursor');
+      candidates.push('~/Library/Application Support/Cursor/User/workspaceStorage');
+      candidates.push('~/.cursor');
+    } else {
+      candidates.push('~/.config/Cursor/User/globalStorage/true-cursor.cursor');
+      candidates.push('~/.config/Cursor/User/workspaceStorage');
+      candidates.push('~/.cursor');
+    }
+    return candidates;
+  }
+
   async initialize(): Promise<void> {
     logger.info('[CursorAdapter] 初始化中', { mode: this.config.mode });
     this.running = true;
@@ -146,25 +167,7 @@ export class CursorAdapter implements AgentAdapter {
 
   private resolveLogPath(): string | null {
     if (this.config.logPath) return this.config.logPath;
-
-    const candidates: string[] = [];
-    if (process.platform === 'win32') {
-      candidates.push('%APPDATA%/Cursor/User/globalStorage/true-cursor.cursor');
-      candidates.push('%APPDATA%/Cursor/User/globalStorage');
-      candidates.push('%APPDATA%/Cursor');
-      candidates.push('%APPDATA%/Code/User/globalStorage/true-cursor.cursor');
-      candidates.push('%USERPROFILE%/.cursor');
-      candidates.push('%LOCALAPPDATA%/Cursor');
-    } else if (process.platform === 'darwin') {
-      candidates.push('~/Library/Application Support/Cursor/User/globalStorage/true-cursor.cursor');
-      candidates.push('~/Library/Application Support/Cursor/User/workspaceStorage');
-      candidates.push('~/.cursor');
-    } else {
-      candidates.push('~/.config/Cursor/User/globalStorage/true-cursor.cursor');
-      candidates.push('~/.config/Cursor/User/workspaceStorage');
-      candidates.push('~/.cursor');
-    }
-    return findExistingDir(candidates);
+    return findExistingDir(this.getCandidatePaths());
   }
 }
 

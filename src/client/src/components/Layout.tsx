@@ -5,6 +5,7 @@ const navItems = [
   { path: '/events', label: '事件列表', icon: '📋' },
   { path: '/rules', label: '规则管理', icon: '⚙️' },
   { path: '/router', label: '模型路由', icon: '🧭' },
+  { path: '/context', label: '上下文管理', icon: '🧹' },
   { path: '/settings', label: '设置', icon: '🔧' },
 ];
 

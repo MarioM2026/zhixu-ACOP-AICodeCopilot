@@ -292,3 +292,84 @@ export interface RoutingStats {
   avgCostByModel: Record<string, number>;         // 各模型平均成本
   strategyUsage: Record<RoutingStrategy, number>;  // 各策略使用次数
 }
+
+/** 清理建议类型 */
+export type CleanupAction = 'keep' | 'archive' | 'cleanup' | 'new_session';
+
+/** 会话画像 */
+export interface ContextSession {
+  sessionId: string;                 // 会话 ID
+  tool: ToolType;                    // 所属工具
+  modelId: string;                   // 使用的模型（最后一次）
+  eventCount: number;                // 事件总数
+  totalInputTokens: number;          // 累计输入 Token
+  totalOutputTokens: number;         // 累计输出 Token
+  totalTokens: number;               // 累计总 Token
+  avgLatency: number;                // 平均延迟
+  errorCount: number;                // 错误次数
+  errorRate: number;                 // 错误率
+  codeAcceptanceRate: number;        // 代码接受率
+  contextOverflowCount: number;      // 上下文溢出次数
+  firstTimestamp: number;            // 最早事件时间
+  lastTimestamp: number;             // 最近事件时间
+  inactiveHours: number;             // 不活动时长（小时）
+  importanceScore: number;           // 重要度评分（0-100）
+  importanceFactors: {               // 各因子详细得分
+    recency: number;                 // 时效性（0-100）
+    tokenUsage: number;              // Token 使用（0-100）
+    quality: number;                 // 质量（0-100）
+    taskComplexity: number;          // 任务复杂度（0-100）
+  };
+  taskTypes: TaskType[];             // 检测到的任务类型
+  summary: string;                   // 自动摘要
+  riskLevel: 'low' | 'medium' | 'high'; // 风险等级
+  recommendedAction: CleanupAction;  // 建议操作
+  recommendedActionReason: string;   // 建议原因
+}
+
+/** 上下文管理配置 */
+export interface ContextConfig {
+  contextLimits: Record<string, number>; // 各模型上下文上限（Token）
+  inactivityThresholdHours: number;    // 不活动阈值（小时）
+  importanceWeights: {                 // 重要度评分权重
+    recency: number;
+    tokenUsage: number;
+    quality: number;
+    taskComplexity: number;
+  };
+  cleanupThresholds: {                 // 清理阈值
+    archiveScore: number;              // 低于此分数建议归档
+    cleanupScore: number;              // 低于此分数建议清理
+    newSessionTokenRatio: number;      // Token/上限比例超此值建议新会话
+  };
+}
+
+/** 上下文整体统计 */
+export interface ContextStats {
+  totalSessions: number;              // 总会话数
+  totalTokens: number;                // 总 Token 消耗
+  atRiskSessions: number;             // 高风险会话数
+  overflowSessions: number;           // 上下文溢出会话数
+  inactiveSessions: number;           // 长期不活动会话数
+  avgTokensPerSession: number;        // 平均每会话 Token
+  recommendedArchiveCount: number;    // 建议归档数
+  recommendedCleanupCount: number;    // 建议清理数
+  recommendedNewSessionCount: number; // 建议新建会话数
+  sessionsByTool: Record<ToolType, number>;  // 各工具会话分布
+  sessionsByRisk: Record<'low' | 'medium' | 'high', number>; // 风险分布
+}
+
+/** 上下文历史记录（清理/归档操作） */
+export interface ContextHistoryEntry {
+  id: string;
+  sessionId: string;
+  action: CleanupAction;
+  actionAt: number;
+  reason: string;
+  snapshot: {
+    eventCount: number;
+    totalTokens: number;
+    importanceScore: number;
+  };
+}
+

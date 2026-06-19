@@ -1,6 +1,9 @@
 import type { AICodeEvent, ToolType } from '@zhixu/shared/types';
 import { logger } from './logger';
 import { recordAICodeEvent } from './aiCodeEventService';
+import { loadJSON, saveJSON } from './storageService';
+
+const CONFIG_STORAGE_KEY = 'adapter-configs';
 
 export interface AdapterHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -36,6 +39,7 @@ export interface AgentAdapter {
   setLogPath?(path: string): void;
   setEnabled?(enabled: boolean): void;
   getDetectedPath?(): string | null;
+  getCandidatePaths?(): string[];
   submitManualEvent?(event: Partial<AICodeEvent> & { sessionId: string; modelId: string; tokenConsumption: { input: number; output: number; total?: number } }): AICodeEvent;
 }
 
@@ -154,6 +158,7 @@ class AdapterService {
     mode: string;
     logPath: string | null;
     detectedPath: string | null;
+    candidatePaths: string[];
     lastCollectTime: number;
     totalCollected: number;
     lastError?: string;
@@ -162,8 +167,9 @@ class AdapterService {
   }>> {
     const result: Array<{
       toolType: ToolType; name: string; version: string; enabled: boolean; mode: string;
-      logPath: string | null; detectedPath: string | null; lastCollectTime: number;
-      totalCollected: number; lastError?: string; health: AdapterHealth; metrics: AdapterMetrics;
+      logPath: string | null; detectedPath: string | null; candidatePaths: string[];
+      lastCollectTime: number; totalCollected: number; lastError?: string;
+      health: AdapterHealth; metrics: AdapterMetrics;
     }> = [];
 
     for (const [toolType, runtime] of this.registry.entries()) {
@@ -172,6 +178,9 @@ class AdapterService {
         const health = await adapter.healthCheck();
         const metrics = await adapter.getMetrics();
         const anyCfg = adapter.config as any;
+        const candidatePaths = typeof adapter.getCandidatePaths === 'function'
+          ? adapter.getCandidatePaths()
+          : [];
         result.push({
           toolType,
           name: adapter.config.name,
@@ -180,6 +189,7 @@ class AdapterService {
           mode: anyCfg.mode || 'manual',
           logPath: anyCfg.logPath || null,
           detectedPath: typeof adapter.getDetectedPath === 'function' ? adapter.getDetectedPath() : null,
+          candidatePaths,
           lastCollectTime: runtime.lastCollectTime,
           totalCollected: runtime.totalCollected,
           lastError: runtime.lastError,
@@ -201,7 +211,47 @@ class AdapterService {
     if (cfg.logPath !== undefined && adapter.setLogPath) adapter.setLogPath(cfg.logPath);
     if (cfg.enabled !== undefined && adapter.setEnabled) adapter.setEnabled(cfg.enabled);
     logger.info(`Adapter ${toolType} configured`, cfg);
+    await this.persistConfigs();
     return true;
+  }
+
+  /** 从存储恢复各适配器配置（在 register 完成后调用） */
+  async loadConfigs(): Promise<void> {
+    try {
+      const saved = await loadJSON<Record<string, { mode?: string; logPath?: string; enabled?: boolean }>>(CONFIG_STORAGE_KEY, null);
+      if (!saved) return;
+      let applied = 0;
+      for (const [toolType, cfg] of Object.entries(saved)) {
+        const runtime = this.registry.get(toolType as ToolType);
+        if (!runtime) continue;
+        const adapter = runtime.adapter;
+        if (cfg.mode !== undefined && adapter.setMode) adapter.setMode(cfg.mode as any);
+        if (cfg.logPath !== undefined && adapter.setLogPath) adapter.setLogPath(cfg.logPath);
+        if (cfg.enabled !== undefined && adapter.setEnabled) adapter.setEnabled(cfg.enabled);
+        applied++;
+      }
+      logger.info(`[AdapterService] 已恢复 ${applied} 个适配器的配置`);
+    } catch (error) {
+      logger.error('[AdapterService] 恢复配置失败', { error: String(error) });
+    }
+  }
+
+  /** 把当前所有适配器配置写回存储 */
+  private async persistConfigs(): Promise<void> {
+    try {
+      const snapshot: Record<string, { mode?: string; logPath?: string; enabled?: boolean }> = {};
+      for (const [toolType, runtime] of this.registry.entries()) {
+        const anyCfg = runtime.adapter.config as any;
+        snapshot[toolType] = {
+          mode: anyCfg.mode,
+          logPath: anyCfg.logPath,
+          enabled: runtime.adapter.config.enabled,
+        };
+      }
+      await saveJSON(CONFIG_STORAGE_KEY, snapshot);
+    } catch (error) {
+      logger.error('[AdapterService] 持久化配置失败', { error: String(error) });
+    }
   }
 
   async shutdownAll(): Promise<void> {

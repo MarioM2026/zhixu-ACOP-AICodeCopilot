@@ -158,3 +158,8 @@ export async function getRecentEvents(limit: number = 100): Promise<AICodeEvent[
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, limit);
 }
+
+// 获取所有事件（用于上下文管理分析）
+export async function getAllEvents(): Promise<AICodeEvent[]> {
+  return Array.from(events.values());
+}
