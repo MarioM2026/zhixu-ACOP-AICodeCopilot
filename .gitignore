@@ -1,0 +1,93 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build
+dist/
+build/
+*.tgz
+
+# Database
+data/
+*.db
+*.sqlite
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+coverage/
+.nyc_output/
+
+# Docker
+.dockerignore
+
+# Misc
+*.bak
+*.tmp
+*.temp
+
+# ========================
+# 🚫 敏感信息保护 - 禁止上传
+# ========================
+
+# 本地配置文件（可能包含邮箱、密码、密钥）
+config.local.*
+config.private.*
+*.local.*
+*private*
+
+# 环境变量文件（所有 .env 开头的文件，除模板外）
+*.env
+!.env.example
+
+# 密钥与凭证文件
+*.key
+*.pem
+*.p12
+*.pfx
+*.pub
+
+# 缓存文件
+.cache/
+.temp/
+.tmp/
+
+# Node.js 缓存
+.npm
+.eslintcache
+
+# 本地运行时产物
+*.local.json
+local-*.json
+
+# Travis / CI 相关（如本地调试时产生的文件）
+.travis/
+.vercel/
+.next/
+
+# 开发日志（可能包含调试信息）
+开发日志.md.bak

@@ -1,0 +1,61 @@
+# 知墟 (ZhiXu) - AI 编程助手观测与优化平台
+# Docker Compose 部署配置
+# 版本: v2 格式，适用于 Docker Compose v1.27.0+ 和 Docker Desktop
+
+services:
+  # 知墟 核心服务
+  zhixu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zhixu-core
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - LOG_LEVEL=info
+    volumes:
+      - ./data:/app/data:rw
+      - ./logs:/app/logs:rw
+    networks:
+      - zhixu-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 知墟 开发服务器（可选，用于开发环境）
+  zhixu-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: zhixu-dev
+    profiles:
+      - development
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - LOG_LEVEL=debug
+    volumes:
+      - .:/app:rw
+      - node_modules:/app/node_modules:rw
+    networks:
+      - zhixu-network
+    command: npm run dev
+
+# 网络配置
+networks:
+  zhixu-network:
+    driver: bridge
+
+# 数据卷
+volumes:
+  node_modules:
+    driver: local

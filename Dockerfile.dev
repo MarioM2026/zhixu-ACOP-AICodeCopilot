@@ -1,0 +1,22 @@
+# ACOP - 开发环境 Dockerfile
+# 适用于本地开发和调试
+
+FROM node:20-alpine
+WORKDIR /app
+
+# 安装依赖
+COPY package*.json ./
+RUN npm install
+
+# 复制源代码
+COPY . .
+
+# 暴露端口
+EXPOSE 3000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+# 启动开发服务器
+CMD ["npm", "run", "dev"]

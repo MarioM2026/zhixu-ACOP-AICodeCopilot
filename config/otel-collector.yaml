@@ -1,0 +1,67 @@
+# OpenTelemetry Collector Configuration
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # 接收 Prometheus 格式的指标
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'zhixu'
+          static_configs:
+            - targets: ['localhost:3000']
+
+processors:
+  batch:
+    timeout: 10s
+    send_batch_size: 1024
+
+  # 数据过滤（脱敏处理）
+  filter:
+    spans:
+      exclude:
+        match_type: strict
+        attributes:
+          - key: api_key
+            action: delete
+
+exporters:
+  # 输出到控制台（开发环境）
+  console:
+    format: json
+    verbosity: detailed
+
+  # 输出到 Prometheus（用于 Grafana）
+  prometheus:
+    endpoint: 0.0.0.0:55679
+    namespace: zhixu
+    const_labels:
+      service: zhixu
+
+  # 输出到后端服务（可选）
+  otlp:
+    endpoint: http://localhost:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, filter]
+      exporters: [console, otlp]
+
+    metrics:
+      receivers: [prometheus]
+      processors: [batch]
+      exporters: [prometheus]
+
+    logs:
+      receivers: [otlp]
+      processors: [batch, filter]
+      exporters: [console]
