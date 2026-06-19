@@ -18,11 +18,10 @@
 
 ### 技术栈
 
-- **后端**: Node.js 18+ / Python 3.10+
-- **数据采集**: OpenTelemetry Collector
-- **可视化**: Grafana + Prometheus
-- **前端**: React
-- **数据库**: SQLite (开发) → PostgreSQL (生产)
+- **后端**: Node.js 18+ / Express / TypeScript
+- **数据采集**: OpenTelemetry Collector + 适配器日志扫描
+- **数据持久化**: JSON 文件存储（`data/` 目录）+ 防抖延迟写入
+- **前端**: React + Vite + TypeScript
 - **容器化**: Docker + Docker Compose
 
 ---
@@ -67,12 +66,11 @@ cp .env.example .env
 OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
 OTEL_SERVICE_NAME=zhixu-development
 
-# 数据库配置
-DATABASE_URL=sqlite:///./data/zhixu.db
+# 数据目录（可选，默认 ./data）
+DATA_DIR=./data
 
 # 服务端口
 PORT=3000
-GRAFANA_PORT=3001
 ```
 
 ### 5. 启动开发服务
@@ -87,7 +85,8 @@ npm run dev
 
 访问地址：
 - 应用面板: http://localhost:3000
-- Grafana: http://localhost:3001
+- 后端 API: http://localhost:3001
+- 前端热重载: http://localhost:3000 (Vite HMR)
 
 ---
 
@@ -309,14 +308,18 @@ docker-compose restart
 2. 确认 OpenTelemetry Collector 运行中
 3. 检查防火墙是否开放对应端口
 
-### Q3: 数据库迁移失败
+### Q3: 如何查看持久化数据？
 
 ```bash
-# 重新运行迁移
-npm run db:migrate
+# 数据存储在 data/ 目录
+ls data/
+# events.json    - 事件数据
+# rules.json     - 规则配置
+# alerts.json    - 告警通道配置
+# alerts-history.json - 告警历史记录
 
-# 或重置数据库 (开发环境)
-npm run db:reset
+# 直接查看内容
+cat data/events.json | head -50
 ```
 
 **确认后即可开始开发！🚀
