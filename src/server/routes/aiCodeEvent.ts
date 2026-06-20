@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { recordAICodeEvent, getEvents, getEventById } from '../services/aiCodeEventService';
+import { recordAICodeEvent, getEvents, getEventById, resetEventsToSample, clearAllEvents, hasRealEvents } from '../services/aiCodeEventService';
 import type { AICodeEvent } from '@zhixu/shared/types';
+import { logger } from '../services/logger';
 
 const router = Router();
 
@@ -59,6 +60,35 @@ router.get('/:id', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+
+// 重置事件：清空后恢复为 15 条模拟数据
+router.post('/reset', async (_req, res) => {
+  try {
+    const count = await resetEventsToSample();
+    logger.info('Events reset to sample data', { count });
+    res.json({ success: true, message: '已重置为 ' + count + ' 条模拟事件', count });
+  } catch (error) {
+    logger.error('Reset events failed', { error: String(error) });
+    res.status(500).json({ success: false, message: String(error) });
+  }
+});
+
+// 清空所有事件
+router.delete('/all', async (_req, res) => {
+  try {
+    await clearAllEvents();
+    logger.info('All events cleared');
+    res.json({ success: true, message: '所有事件已清空' });
+  } catch (error) {
+    logger.error('Clear all events failed', { error: String(error) });
+    res.status(500).json({ success: false, message: String(error) });
+  }
+});
+
+// 查询当前事件是否是真实数据
+router.get('/status', (_req, res) => {
+  res.json({ success: true, hasRealData: hasRealEvents() });
 });
 
 export { router as aiCodeEventRoutes };

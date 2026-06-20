@@ -75,6 +75,8 @@ export interface Rule {
   condition: RuleCondition;
   action: RuleAction;
   priority: 'low' | 'medium' | 'high';
+  triggerCount?: number;           // 累计触发次数
+  lastTriggeredAt?: number;        // 最近一次触发时间（Unix ms）
 }
 
 export interface RuleCondition {

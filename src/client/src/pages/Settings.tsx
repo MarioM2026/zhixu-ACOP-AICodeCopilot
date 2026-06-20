@@ -334,7 +334,7 @@ function Settings() {
       applyTheme('dark');
     }
 
-    // 把已保存的告警通道配置同步到后端（否则 sendAlert 读不到）
+    // 同步已保存的告警通道配置到后端
     if (savedAlert) {
       try {
         const parsed = JSON.parse(savedAlert);
@@ -350,7 +350,85 @@ function Settings() {
         console.error('[Settings] 恢复告警通道配置到后端失败', error);
       }
     }
+
+    // 从后端加载规则阈值，覆盖 localStorage 的默认值
+    loadRulesFromServer();
   }, []);
+
+  // 从后端加载规则阈值并同步到前端 UI
+  async function loadRulesFromServer() {
+    try {
+      const response = await api.get('/api/rules');
+      if (response && response.success && response.data) {
+        const rules = response.data as Array<{
+          id: string;
+          condition: { type: string; threshold: number; operator: string };
+        }>;
+
+        const tokenRule = rules.find(r => r.condition.type === 'token_threshold' && r.condition.threshold > 1);
+        const errorRateRule = rules.find(r => r.condition.type === 'error_rate');
+        const latencyRule = rules.find(r => r.condition.type === 'latency_threshold');
+
+        setAlertConfig(prev => ({
+          ...prev,
+          rules: {
+            tokenThreshold: tokenRule ? Number(tokenRule.condition.threshold) : prev.rules.tokenThreshold,
+            errorRateThreshold: errorRateRule ? Number(errorRateRule.condition.threshold) : prev.rules.errorRateThreshold,
+            latencyThreshold: latencyRule ? Number(latencyRule.condition.threshold) : prev.rules.latencyThreshold,
+          },
+        }));
+      }
+    } catch (error) {
+      console.error('[Settings] 从后端加载规则失败', error);
+    }
+  }
+
+  // 将阈值保存到后端规则
+  async function saveThresholdsToServer() {
+    try {
+      const response = await api.get('/api/rules');
+      if (!response || !response.success || !response.data) return;
+
+      const rules = response.data as Array<{
+        id: string;
+        name: string;
+        enabled: boolean;
+        condition: { type: string; threshold: number; operator: string };
+        action: { type: string; config: any };
+        priority: string;
+      }>;
+
+      let updatedCount = 0;
+
+      for (const rule of rules) {
+        let newThreshold: number | null = null;
+
+        if (rule.condition.type === 'token_threshold' && rule.condition.threshold > 1) {
+          newThreshold = alertConfig.rules.tokenThreshold;
+        } else if (rule.condition.type === 'error_rate') {
+          newThreshold = alertConfig.rules.errorRateThreshold;
+        } else if (rule.condition.type === 'latency_threshold') {
+          newThreshold = alertConfig.rules.latencyThreshold;
+        }
+
+        if (newThreshold !== null && newThreshold !== Number(rule.condition.threshold)) {
+          const updatedRule = {
+            ...rule,
+            condition: { ...rule.condition, threshold: newThreshold },
+          };
+          await api.put(`/api/rules/${rule.id}`, updatedRule);
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount > 0) {
+        toast.success(`已同步 ${updatedCount} 条规则阈值到后端`);
+      }
+    } catch (error) {
+      console.error('[Settings] 保存阈值到后端失败', error);
+      toast.warning('阈值保存到本地，但同步后端失败');
+    }
+  }
 
   // 主题变更时立即应用到 DOM
   useEffect(() => {
@@ -363,8 +441,9 @@ function Settings() {
       localStorage.setItem('zhixu-otel-config', JSON.stringify(otelConfig));
       localStorage.setItem('zhixu-alert-config', JSON.stringify(alertConfig));
       localStorage.setItem('zhixu-ui-config', JSON.stringify(uiConfig));
+      await saveThresholdsToServer();
       setSaved(true);
-      toast.success('配置已保存');
+      toast.success('配置已保存并同步到后端');
       setTimeout(() => setSaved(false), 2000);
     } catch (error) {
       toast.error('保存配置失败');

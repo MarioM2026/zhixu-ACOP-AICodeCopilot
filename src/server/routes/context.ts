@@ -3,6 +3,7 @@ import {
   contextManagerService,
   analyzeSessions,
   getSession,
+  getSessionEvents,
   getStats,
   recordAction,
   getHistory,
@@ -54,6 +55,18 @@ router.get('/sessions/:sessionId', async (req, res) => {
     return res.json({ success: true, data: session });
   } catch (err) {
     logger.error('[Context] /sessions/:id 错误', err);
+    res.status(500).json({ success: false, error: String(err) });
+  }
+});
+
+// GET /api/context/sessions/:sessionId/events — 获取会话的事件列表
+router.get('/sessions/:sessionId/events', async (req, res) => {
+  try {
+    const limit = Math.min(100, Number(req.query.limit) || 20);
+    const events = await getSessionEvents(req.params.sessionId, limit);
+    return res.json({ success: true, data: events, count: events.length });
+  } catch (err) {
+    logger.error('[Context] /sessions/:id/events 错误', err);
     res.status(500).json({ success: false, error: String(err) });
   }
 });

@@ -1,11 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { AICodeEvent, ApiResponse } from '@zhixu/shared/types';
 import { logger } from './logger';
-import { loadJSON, schedulePersist } from './storageService';
+import { loadJSON, schedulePersist, saveJSON } from './storageService';
 
 const STORAGE_KEY = 'ai-code-events';
 
 const events: Map<string, AICodeEvent> = new Map();
+
+/** 真实数据标记：是否包含从 Trae/Cursor/Claude 等适配器采集到的真实事件 */
+let hasRealData: boolean = false;
 
 function getSampleEvents(): AICodeEvent[] {
   const now = Date.now();
@@ -52,15 +55,20 @@ function getSampleEvents(): AICodeEvent[] {
   });
 }
 
+/** 从持久化加载。若持久化文件为空 → 注入 15 条模拟数据；有数据 → 使用真实数据 */
 export async function loadFromStorage(): Promise<void> {
   const saved = await loadJSON<AICodeEvent[]>(STORAGE_KEY, []);
+  events.clear();
+
   if (saved.length > 0) {
     saved.forEach((event) => events.set(event.id || uuidv4(), event));
-    logger.info(`[Events] 从持久化加载 ${saved.length} 条事件`);
+    hasRealData = true;
+    logger.info(`[Events] 从持久化加载 ${saved.length} 条事件（真实数据）`);
   } else {
     const sample = getSampleEvents();
     sample.forEach((event) => events.set(event.id || uuidv4(), event));
-    logger.info(`[Events] 首次启动，注入 ${sample.length} 条示例事件`);
+    hasRealData = false;
+    logger.info(`[Events] 首次启动，注入 ${sample.length} 条示例事件（模拟数据）`);
     schedulePersist(STORAGE_KEY, () => Array.from(events.values()));
   }
 }
@@ -69,18 +77,88 @@ function persist(): void {
   schedulePersist(STORAGE_KEY, () => Array.from(events.values()));
 }
 
-// 记录 AI 代码事件
+/** 重置事件：清空所有数据并恢复 15 条模拟数据。返回重置后的事件总数 */
+export async function resetEventsToSample(): Promise<number> {
+  events.clear();
+  const sample = getSampleEvents();
+  sample.forEach((event) => events.set(event.id || uuidv4(), event));
+  hasRealData = false;
+  await saveJSON(STORAGE_KEY, Array.from(events.values()));
+  logger.info(`[Events] 已重置为 ${sample.length} 条示例事件`);
+  return events.size;
+}
+
+/** 清空所有事件。返回 0 */
+export async function clearAllEvents(): Promise<number> {
+  events.clear();
+  hasRealData = false;
+  await saveJSON(STORAGE_KEY, []);
+  logger.info('[Events] 已清空所有事件');
+  return 0;
+}
+
+/** 是否有真实数据（非模拟 seed 数据） */
+export function hasRealEvents(): boolean {
+  return hasRealData;
+}
+
+// 记录 AI 代码事件（带 token 安全校验：避免解析错误导致的万亿级 token 数据）
 export async function recordAICodeEvent(event: AICodeEvent): Promise<AICodeEvent> {
+  const TOKEN_LIMIT = 2000000; // 200 万，超过此值视为解析错误
+  const LATENCY_LIMIT = 10 * 60 * 1000; // 10 分钟
+
+  // Token 清理：限制上限，非正数归零
+  const inputTokens = event.tokenConsumption?.input
+    ? Math.min(TOKEN_LIMIT, Math.max(0, event.tokenConsumption.input))
+    : 0;
+  const outputTokens = event.tokenConsumption?.output
+    ? Math.min(TOKEN_LIMIT, Math.max(0, event.tokenConsumption.output))
+    : 0;
+
+  // 延迟清理：限制上限，非正数归零
+  const latency = event.performance?.latency
+    ? Math.min(LATENCY_LIMIT, Math.max(0, event.performance.latency))
+    : 0;
+  const ttft = event.performance?.ttft
+    ? Math.min(LATENCY_LIMIT, Math.max(0, event.performance.ttft))
+    : 0;
+
+  const hasTokenAnomaly =
+    (event.tokenConsumption?.input || 0) > TOKEN_LIMIT ||
+    (event.tokenConsumption?.output || 0) > TOKEN_LIMIT;
+
   const id = event.id || uuidv4();
   const newEvent: AICodeEvent = {
     ...event,
     id,
     traceId: event.traceId || uuidv4(),
     timestamp: event.timestamp || Date.now(),
+    tokenConsumption: {
+      input: inputTokens,
+      output: outputTokens,
+      total: inputTokens + outputTokens,
+    },
+    performance: {
+      latency,
+      ttft,
+    },
   };
 
+  // 当接收到真实事件时，标记为真实数据模式
+  hasRealData = true;
+
   events.set(id, newEvent);
-  logger.info(`Recorded AI code event: ${id}`, { tool: event.tool, sessionId: event.sessionId });
+  if (hasTokenAnomaly) {
+    logger.warn(`Token 异常已被修正`, {
+      id,
+      originalInput: event.tokenConsumption?.input,
+      originalOutput: event.tokenConsumption?.output,
+      sanitizedInput: inputTokens,
+      sanitizedOutput: outputTokens,
+    });
+  } else {
+    logger.info(`Recorded AI code event: ${id}`, { tool: event.tool, sessionId: event.sessionId });
+  }
   persist();
 
   return newEvent;

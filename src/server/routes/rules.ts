@@ -6,6 +6,7 @@ import {
   updateRule,
   deleteRule,
   triggerRule,
+  resetRules,
 } from '../services/ruleService';
 import type { Rule } from '@zhixu/shared/types';
 
@@ -106,6 +107,16 @@ router.post('/:id/trigger', async (req, res, next) => {
         alert: result.alert,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 重置为默认规则
+router.post('/reset', async (_req, res, next) => {
+  try {
+    const count = await resetRules();
+    res.json({ success: true, count, message: '已重置为 ' + count + ' 条默认规则' });
   } catch (error) {
     next(error);
   }

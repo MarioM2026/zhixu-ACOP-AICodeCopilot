@@ -1955,4 +1955,144 @@ tr:hover {
   }
 }
 
+/* ============ 告警 Banner ============ */
+.alert-banner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1.25rem;
+  margin: 1rem 0 0 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 107, 53, 0.06);
+}
+
+.alert-banner-warning {
+  border-color: rgba(255, 107, 53, 0.4);
+  background: rgba(255, 107, 53, 0.06);
+}
+
+.alert-banner-critical {
+  border-color: rgba(255, 51, 102, 0.5);
+  background: rgba(255, 51, 102, 0.08);
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.15);
+}
+
+.alert-banner-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.alert-banner-critical .alert-banner-icon {
+  color: var(--error-color);
+}
+
+.alert-banner-warning .alert-banner-icon {
+  color: var(--warning-color);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.alert-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.alert-banner-title {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.alert-banner-count {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.alert-banner-warning .alert-banner-count {
+  color: var(--warning-color);
+}
+
+.alert-banner-critical .alert-banner-count {
+  color: var(--error-color);
+}
+
+.alert-banner-latest {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.alert-banner-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.4rem 0.875rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-outline:hover {
+  background: rgba(0, 245, 255, 0.08);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 0.3rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+  .alert-banner {
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+  }
+
+  .alert-banner-latest {
+    width: 100%;
+    white-space: normal;
+    margin-top: 0.25rem;
+  }
+}
+
 

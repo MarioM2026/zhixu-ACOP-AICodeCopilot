@@ -2,7 +2,9 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 
 const navItems = [
   { path: '/dashboard', label: '监控看板', icon: '📊' },
+  { path: '/alerts', label: '告警历史', icon: '🔔' },
   { path: '/events', label: '事件列表', icon: '📋' },
+  { path: '/prompts', label: '提示注入中心', icon: '💡' },
   { path: '/rules', label: '规则管理', icon: '⚙️' },
   { path: '/router', label: '模型路由', icon: '🧭' },
   { path: '/context', label: '上下文管理', icon: '🧹' },

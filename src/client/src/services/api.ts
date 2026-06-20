@@ -82,6 +82,22 @@ class ApiClient {
       throw error;
     }
   }
+
+  async patch<T>(path: string, data?: unknown): Promise<ApiResponse<T>> {
+    try {
+      const response = await fetch(`${this.baseUrl}${path}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: data ? JSON.stringify(data) : undefined,
+      });
+      return await response.json();
+    } catch (error) {
+      console.error(`API PATCH ${path} failed:`, error);
+      throw error;
+    }
+  }
 }
 
 export const api = new ApiClient(API_BASE_URL);

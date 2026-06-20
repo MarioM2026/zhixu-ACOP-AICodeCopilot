@@ -7,6 +7,7 @@ import { dashboardRoutes } from './routes/dashboard';
 import { ruleRoutes } from './routes/rules';
 import { healthRoutes } from './routes/health';
 import { alertRoutes } from './routes/alerts';
+import { promptInjectionRoutes } from './routes/promptInjection';
 import { adapterRoutes } from './routes/adapters';
 import routerRoutes from './routes/router';
 import contextRoutes from './routes/context';
@@ -23,6 +24,7 @@ import { contextManagerService } from './services/contextManagerService';
 import * as aiCodeEventService from './services/aiCodeEventService';
 import * as alertService from './services/alertService';
 import * as ruleService from './services/ruleService';
+import * as promptInjectionService from './services/promptInjectionService';
 
 config();
 
@@ -49,6 +51,7 @@ app.use('/api/events', aiCodeEventRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rules', ruleRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/prompt-injections', promptInjectionRoutes);
 app.use('/api/adapters', adapterRoutes);
 app.use('/api/router', routerRoutes);
 app.use('/api/context', contextRoutes);
@@ -75,6 +78,7 @@ async function startup() {
   await aiCodeEventService.loadFromStorage();
   await alertService.loadFromStorage();
   await ruleService.loadFromStorage();
+  await promptInjectionService.loadFromStorage();
   await routerService.initialize();
   await modelProfileService.initialize();
   await contextManagerService.initialize();

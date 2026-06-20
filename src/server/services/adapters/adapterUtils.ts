@@ -83,14 +83,26 @@ export function listLogFiles(dir: string, maxFiles: number = 15): string[] {
 }
 
 /**
+ * 安全上限：单条事件的 token 数量不应超过此值
+ * 目前最大上下文模型约 100-200 万 tokens，使用 200 万作为保守上限
+ */
+const TOKEN_SAFETY_LIMIT = 2000000;
+
+/**
  * 尝试从一段文本中提取 token 数
- * 常见格式: "prompt_tokens": 1000, "tokens used": 500, "input": 300 等
+ * 常见格式: "prompt_tokens": 1000, "tokens used": 500 等
+ * 注意: 不使用 "input" 这类过于宽泛的关键字，避免匹配到时间戳/大小等非 token 字段
  */
 function extractNumber(text: string, keys: string[]): number {
   for (const k of keys) {
-    const re = new RegExp(`["']?${k}["']?\\s*[:=]\\s*(\\d+)`, 'i');
+    // 使用 \\b 确保字段名是独立的词（避免 some_input 被 input 匹配到）
+    const re = new RegExp(`["']?\\b${k}\\b["']?\\s*[:=]\\s*(\\d+)`, 'i');
     const m = text.match(re);
-    if (m && m[1]) return parseInt(m[1], 10);
+    if (m && m[1]) {
+      const v = parseInt(m[1], 10);
+      if (isNaN(v) || v <= 0 || v > TOKEN_SAFETY_LIMIT) continue;
+      return v;
+    }
   }
   return 0;
 }
@@ -144,6 +156,17 @@ export function parseGenericContent(
   return events;
 }
 
+/**
+ * 对从任意来源读取的 token 数值进行安全清理
+ * - 不是数字 / <= 0 / > TOKEN_SAFETY_LIMIT 的值均视为无效
+ */
+function sanitizeTokenValue(raw: any): number {
+  if (raw === undefined || raw === null) return 0;
+  const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10);
+  if (isNaN(n) || n <= 0 || n > TOKEN_SAFETY_LIMIT) return 0;
+  return n;
+}
+
 function extractEventFromObject(obj: any, toolType: ToolType, defaultModel: string): AICodeEvent | null {
   if (!obj || typeof obj !== 'object') return null;
 
@@ -152,12 +175,23 @@ function extractEventFromObject(obj: any, toolType: ToolType, defaultModel: stri
     || obj.tokenUsage || obj.usage || obj.tokens || obj.inputTokens !== undefined;
   if (!hasMarker) return null;
 
-  const inputTokens =
-    obj.tokenUsage?.prompt || obj.tokens?.prompt || obj.usage?.prompt_tokens
-    || obj.input_tokens || obj.inputTokens || obj.prompt_tokens || extractNumber(JSON.stringify(obj), ['prompt_tokens', 'input_tokens', 'input', 'prompt']);
-  const outputTokens =
-    obj.tokenUsage?.completion || obj.tokens?.completion || obj.usage?.completion_tokens
-    || obj.output_tokens || obj.outputTokens || obj.completion_tokens || extractNumber(JSON.stringify(obj), ['completion_tokens', 'output_tokens', 'output', 'completion']);
+  // 从对象属性读取，每个值都单独做范围检查
+  const inputTokens = sanitizeTokenValue(obj.tokenUsage?.prompt)
+    || sanitizeTokenValue(obj.tokens?.prompt)
+    || sanitizeTokenValue(obj.usage?.prompt_tokens)
+    || sanitizeTokenValue(obj.input_tokens)
+    || sanitizeTokenValue(obj.inputTokens)
+    || sanitizeTokenValue(obj.prompt_tokens)
+    // 回退到文本匹配（关键字只保留带 _tokens 的精确字段，避免宽泛词误匹配）
+    || extractNumber(JSON.stringify(obj), ['prompt_tokens', 'input_tokens', 'prompt_max_tokens']);
+
+  const outputTokens = sanitizeTokenValue(obj.tokenUsage?.completion)
+    || sanitizeTokenValue(obj.tokens?.completion)
+    || sanitizeTokenValue(obj.usage?.completion_tokens)
+    || sanitizeTokenValue(obj.output_tokens)
+    || sanitizeTokenValue(obj.outputTokens)
+    || sanitizeTokenValue(obj.completion_tokens)
+    || extractNumber(JSON.stringify(obj), ['completion_tokens', 'output_tokens', 'generated_tokens']);
 
   if (inputTokens === 0 && outputTokens === 0) return null;
 

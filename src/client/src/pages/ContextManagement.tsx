@@ -95,6 +95,8 @@ function ContextManagement() {
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedSession, setSelectedSession] = useState<ContextSession | null>(null);
+  const [sessionEvents, setSessionEvents] = useState<any[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [riskFilter, setRiskFilter] = useState<string>('all');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [searchText, setSearchText] = useState('');
@@ -136,6 +138,24 @@ function ContextManagement() {
       loadHistory();
     } catch (e) { console.error(e); }
   }
+
+  async function loadSessionEvents(sessionId: string) {
+    setEventsLoading(true);
+    try {
+      const res = await api.get(`/api/context/sessions/${sessionId}/events?limit=10`);
+      if (res.success) setSessionEvents(res.data || []);
+    } catch (e) { console.error(e); setSessionEvents([]); }
+    setEventsLoading(false);
+  }
+
+  // 选中会话时加载事件
+  useEffect(() => {
+    if (selectedSession) {
+      loadSessionEvents(selectedSession.sessionId);
+    } else {
+      setSessionEvents([]);
+    }
+  }, [selectedSession?.sessionId]);
 
   useEffect(() => { loadSessions(); loadStats(); loadConfig(); loadHistory(); }, []);
 
@@ -651,6 +671,51 @@ function ContextManagement() {
                   <div className="detail-cell-label">上下文溢出</div>
                   <div className="detail-cell-value" style={{ color: selectedSession.contextOverflowCount > 0 ? 'var(--warning-color)' : 'var(--text-secondary)' }}>{selectedSession.contextOverflowCount} 次</div>
                 </div>
+              </div>
+
+              {/* 最近事件 */}
+              <div className="detail-section">
+                <h3 className="detail-section-title">最近事件 ({sessionEvents.length})</h3>
+                {eventsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>加载中...</div>
+                ) : sessionEvents.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--text-secondary)' }}>暂无事件数据</div>
+                ) : (
+                  <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                    <table style={{ fontSize: '0.75rem' }}>
+                      <thead>
+                        <tr>
+                          <th>时间</th>
+                          <th>模型</th>
+                          <th>输入</th>
+                          <th>输出</th>
+                          <th>延迟</th>
+                          <th>状态</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessionEvents.map((ev: any, i: number) => (
+                          <tr key={i}>
+                            <td style={{ color: 'var(--text-secondary)' }}>{formatTime(ev.timestamp)}</td>
+                            <td style={{ maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.modelId}</td>
+                            <td style={{ color: '#3b82f6' }}>{ev.tokenConsumption?.input?.toLocaleString() || 0}</td>
+                            <td style={{ color: '#8b5cf6' }}>{ev.tokenConsumption?.output?.toLocaleString() || 0}</td>
+                            <td>{ev.performance?.latency || 0}ms</td>
+                            <td>
+                              {ev.quality?.errorType ? (
+                                <span style={{ color: 'var(--error-color)' }}>❌</span>
+                              ) : ev.quality?.codeAcceptance ? (
+                                <span style={{ color: 'var(--success-color)' }}>✓</span>
+                              ) : (
+                                <span style={{ color: 'var(--text-secondary)' }}>-</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* 操作按钮 */}

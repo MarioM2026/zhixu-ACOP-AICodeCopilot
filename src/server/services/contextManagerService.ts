@@ -365,6 +365,20 @@ export async function getSession(sessionId: string): Promise<ContextSession | nu
   return sessions.find(s => s.sessionId === sessionId) || null;
 }
 
+/** 获取单个会话的事件列表 */
+export async function getSessionEvents(
+  sessionId: string,
+  limit = 20
+): Promise<AICodeEvent[]> {
+  const allEvents = await getAllEvents();
+  const sessionEvents = allEvents.filter(
+    ev => (ev.sessionId || ev.traceId || 'unknown') === sessionId
+  );
+  // 按时间降序排序，取最近 N 条
+  sessionEvents.sort((a, b) => b.timestamp - a.timestamp);
+  return sessionEvents.slice(0, limit);
+}
+
 /** 获取整体统计 */
 export async function getStats(): Promise<ContextStats> {
   const sessions = await analyzeSessions();
@@ -449,6 +463,7 @@ export const contextManagerService = {
   updateConfig,
   analyzeSessions,
   getSession,
+  getSessionEvents,
   getStats,
   recordAction,
   getHistory,

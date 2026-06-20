@@ -4,8 +4,11 @@ import type {
   ErrorDistribution,
   ToolUsageStats,
   Session,
+  Alert,
+  Rule,
 } from '@zhixu/shared/types';
 import { logger } from './logger';
+import { getAlerts, getRules } from './ruleService';
 
 // 内存存储（开发环境使用，生产环境应使用数据库）
 const events: Map<string, any> = new Map();
@@ -224,4 +227,128 @@ export function initDashboardSamples() {
   } catch (error) {
     logger.error('[dashboardService] 初始化失败:', error);
   }
+}
+
+/** 告警趋势数据（按天统计） */
+export interface AlertTrend {
+  date: string;
+  critical: number;
+  warning: number;
+  info: number;
+  total: number;
+}
+
+/** 告警统计摘要 */
+export interface AlertStats {
+  total: number;
+  critical: number;
+  warning: number;
+  info: number;
+  acknowledged: number;
+  unacknowledged: number;
+}
+
+/**
+ * 获取告警趋势数据（按天统计）
+ */
+export async function getAlertTrend(
+  query?: number | string | { days?: string; startDate?: string; endDate?: string }
+): Promise<AlertTrend[]> {
+  const { startDate, endDate } = parseTimeRangeQuery(query ?? {});
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  // 收集时间范围内的每一天
+  const days: string[] = [];
+  const current = new Date(startDate.toISOString().split('T')[0]);
+  const end = new Date(endDate.toISOString().split('T')[0]);
+  while (current <= end) {
+    days.push(current.toISOString().split('T')[0]);
+    current.setTime(current.getTime() + dayMs);
+  }
+
+  // 从 ruleService 获取所有告警
+  const allAlerts = await getAlerts();
+
+  // 按日期统计
+  const stats: Record<string, AlertTrend> = {};
+  for (const date of days) {
+    stats[date] = { date, critical: 0, warning: 0, info: 0, total: 0 };
+  }
+
+  for (const alert of allAlerts) {
+    const date = new Date(alert.timestamp).toISOString().split('T')[0];
+    if (!stats[date]) continue;
+    const item = stats[date];
+    if (alert.severity === 'critical') item.critical++;
+    else if (alert.severity === 'warning') item.warning++;
+    else item.info++;
+    item.total++;
+  }
+
+  return days.map((date) => {
+    const item = stats[date];
+    return item;
+  });
+}
+
+/**
+ * 获取告警统计摘要
+ */
+export async function getAlertStats(): Promise<AlertStats> {
+  const allAlerts = await getAlerts();
+
+  return {
+    total: allAlerts.length,
+    critical: allAlerts.filter((a) => a.severity === 'critical').length,
+    warning: allAlerts.filter((a) => a.severity === 'warning').length,
+    info: allAlerts.filter((a) => a.severity === 'info').length,
+    acknowledged: allAlerts.filter((a) => a.acknowledged).length,
+    unacknowledged: allAlerts.filter((a) => !a.acknowledged).length,
+  };
+}
+
+/** 规则统计项 */
+export interface RuleStat {
+  ruleId: string;
+  ruleName: string;
+  priority: 'low' | 'medium' | 'high';
+  enabled: boolean;
+  triggerCount: number;
+  lastTriggeredAt?: number;
+}
+
+/**
+ * 获取规则触发统计
+ */
+export async function getRuleStats(): Promise<{
+  total: number;
+  enabled: number;
+  totalTriggers: number;
+  rules: RuleStat[];
+}> {
+  const rules = await getRules();
+  let totalTriggers = 0;
+
+  const stats: RuleStat[] = rules.map((rule) => {
+    const count = rule.triggerCount || 0;
+    totalTriggers += count;
+    return {
+      ruleId: rule.id,
+      ruleName: rule.name,
+      priority: rule.priority,
+      enabled: rule.enabled,
+      triggerCount: count,
+      lastTriggeredAt: rule.lastTriggeredAt,
+    };
+  });
+
+  // 按触发次数降序排列
+  stats.sort((a, b) => b.triggerCount - a.triggerCount);
+
+  return {
+    total: rules.length,
+    enabled: rules.filter((r) => r.enabled).length,
+    totalTriggers,
+    rules: stats,
+  };
 }
