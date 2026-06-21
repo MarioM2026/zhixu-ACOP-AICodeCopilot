@@ -9,7 +9,8 @@ echo   ZhiXu ACOP - Startup Script
 echo ================================================
 echo.
 
-:: ========== 1. Check Environment ==========
+:: ========== Step 1: Check Node.js ==========
+echo [1/4] Checking environment...
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found. Please install Node.js 18+
@@ -20,11 +21,14 @@ if %errorlevel% neq 0 (
 )
 
 for /f "delims=" %%A in ('node -v') do set "NODE_VERSION=%%A"
-echo [ENV] Node.js %NODE_VERSION% Ready
+echo [OK] Node.js %NODE_VERSION% detected
 
-:: ========== 2. Check Dependencies ==========
+:: ========== Step 2: Install Dependencies ==========
+echo.
+echo [2/4] Checking dependencies...
+
 if not exist "node_modules" (
-    echo [INSTALL] First run, installing dependencies...
+    echo   First run detected, installing dependencies...
     echo   This may take 2-5 minutes...
     echo.
     call npm install
@@ -34,42 +38,42 @@ if not exist "node_modules" (
         pause
         exit /b 1
     )
-    echo.
+    echo [OK] Dependencies installed successfully
 ) else (
-    echo [ENV] Dependencies Ready
+    echo [OK] Dependencies ready
 )
 
+:: ========== Step 3: Start Services ==========
 echo.
-echo ================================================
-echo [START] Starting services, please wait...
+echo [3/4] Starting services...
 echo.
 
-:: ========== 3. Start Backend ==========
-echo   [1/2] Starting Backend Service (port 3001)...
+echo   [Backend] Starting service (port 3001)...
 start "ZhiXu-ACOP-Backend" /min cmd /c "npm run dev:server"
 timeout /t 3 /nobreak >nul
 
-:: ========== 4. Start Frontend ==========
-echo   [2/2] Starting Frontend Service (port 3000)...
+echo   [Frontend] Starting service (port 3000)...
 start "ZhiXu-ACOP-Frontend" /min cmd /c "npm run dev:client"
 timeout /t 6 /nobreak >nul
 
-:: ========== 5. Open Browser ==========
+:: ========== Step 4: Open Browser ==========
 echo.
-echo [READY] Services started successfully!
+echo [4/4] Opening dashboard...
 echo.
-echo   Frontend: http://localhost:3000
-echo   Dashboard: http://localhost:3000/dashboard
+
+powershell -NoProfile -WindowStyle Hidden -Command "Start-Process 'http://localhost:3000'"
+
+echo ================================================
+echo   Startup Complete!
+echo.
+echo   Frontend:    http://localhost:3000
+echo   Dashboard:   http://localhost:3000/dashboard
 echo   Backend API: http://localhost:3001
 echo.
 echo   Notes:
 echo     - Services run in minimized background windows
 echo     - Closing this window won't stop the services
-echo     - To stop, close windows with title "ZhiXu-ACOP-"
-echo.
-
-powershell -NoProfile -WindowStyle Hidden -Command "Start-Process 'http://localhost:3000'"
-echo   Browser opened.
-echo.
+echo     - To stop, close windows titled "ZhiXu-ACOP-"
 echo ================================================
+echo.
 pause

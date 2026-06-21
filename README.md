@@ -13,7 +13,7 @@
 
 ## 🎯 一句话定位 / One-Line Pitch
 
-**把分散在 Trae / Claude Code / Cursor 等 AI 编程助手中的 Token、错误率、延迟、上下文质量，集中到一个仪表盘；并通过可扩展的规则引擎，自动把"坏的上下文"清理、"低效的模型"切换、"可优化的提示"注入。**
+**把分散在 Trae / Claude Code / Cursor 等 AI 编程助手中的 Token、错误率、延迟、上下文质量，集中到一个仪表盘；并通过可扩展的规则引擎，自动把"坏的上下文"清理、"低效的模型"切换、"可优化的提示"注入。
 
 > **Unify tokens, errors, latency and context quality from Trae / Claude Code / Cursor / v0 into one dashboard — then use a pluggable rule engine to auto-clean bloated sessions, auto-switch models, and auto-inject optimization hints.**
 
@@ -29,7 +29,7 @@
 
 | 痛点 | 用知墟前 | 用知墟后 |
 |------|----------|----------|
-| 💰 **成本失控** | 月底看账单才惊觉 "Token 花在哪了" | Token 实时报表 + 成本告警 + 自动降级低效调用 |
+| 💰 **成本失控** | 月底看账单才惊觉 "Token 花在哪了" | Token 实时报表 · 成本告警 + 自动降级低效调用 |
 | 🧻 **上下文糊掉** | 长对话后输出质量骤降，不知道清理什么 | 会话画像评分，一键归档/清理历史事件 |
 | 📉 **看不到 ROI** | 用了 AI，但不知道它到底省多少时间/加了多少 bug | 错误率/成功率/响应速度可视化 |
 | 🧩 **多工具数据孤岛** | Trae 在一份日志、Cursor 在另一处 | **统一采集 + 统一分析** |
@@ -72,10 +72,10 @@ IF  TTFT > 2s                             →   THEN  注入并发调用提示
 - 环境检测（Node.js ≥ 18）
 - 依赖安装（首次运行）
 - 前后端服务启动
-- 弹出浏览器选择框
+- 自动打开浏览器访问看板
 
 ```
-克隆项目 → 双击 启动.bat → 选择浏览器 → 自动打开管理看板
+克隆项目 → 双击 启动.bat → 前后端服务启动 → 浏览器自动打开看板
 ```
 
 #### 🖥️ 方式二：命令行启动
@@ -107,9 +107,8 @@ npm run dev:client
 
 **连接你的 AI 编程助手：**
 
-1. **Trae**：设置页输入 Trae 日志目录（默认 `%APPDATA%/TRAE SOLO CN/logs`），保存后自动开始扫描
+1. **Trae**：设置页输入 Trae 日志目录（默认 `%APPDATA%/TRAE SOLO CN/logs`，保存后自动开始扫描
 2. **Cursor / Claude Code**：对应适配器已就绪，在 Settings 页启用即可
-
 ### 🏗️ 架构
 
 ```
@@ -118,7 +117,7 @@ npm run dev:client
 │                                                          │
 │   ┌────────────┐  ┌────────────┐  ┌────────────┐       │
 │   │  Trae      │  │Cursor      │  │ Claude Code│ ...    │  ← 适配器
-│   │  适配器    │  │ 适配器      │  │ 适配器     │       │
+│   │  适配器    │  │  适配器      │  │  适配器     │       │
 │   └──────┬─────┘  └──────┬─────┘  └──────┬─────┘       │
 │          │                │                │             │
 │          └────────────────┼────────────────┘             │
@@ -173,7 +172,6 @@ npm run dev:client
 详见 [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
-
 ## 🇬🇧 English
 
 ### 📊 Why You Need It
@@ -220,10 +218,10 @@ Simply double-click `启动.bat` file, which automatically:
 - Detects Node.js environment (≥ 18 required)
 - Installs dependencies (first run only)
 - Starts backend and frontend services
-- Shows browser selection dialog
+- Opens browser to the dashboard
 
 ```
-Clone → Double-click 启动.bat → Select browser → Dashboard opens automatically
+Clone → Double-click 启动.bat → Services start → Dashboard opens automatically
 ```
 
 #### 🖥️ Method 2: Command Line
