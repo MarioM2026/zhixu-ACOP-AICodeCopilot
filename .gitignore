@@ -104,9 +104,10 @@ local-*.json
 *实施进展*.md
 *实施进展*
 
-# PRD 与产品规划（仅保留本地）
+# PRD 与产品规划（仅保留本地，除了安装向导 PRD）
 PRD.md
-*PRD*.md
+*原始*PRD*.md
+!PRD-INSTALLER.md
 
 # AI 开发流程文档
 AI智能体开发助手PRD.html
@@ -147,3 +148,17 @@ scripts/probe-*.cjs
 scripts/trae-*.cjs
 scripts/trae-*.mjs
 scripts/*.png
+
+# ========================
+# 🚫 临时测试脚本（根目录）
+# ========================
+verify-api.ps1
+verify-api.py
+installer-preview.html
+
+# ========================
+# 🚫 容器挂载目录（防止用户本地 volume 数据被提交）
+# ========================
+volumes/
+zhixu-data/
+nginx-ssl/

@@ -1,9 +1,15 @@
 # 知墟 (ZhiXu) - AI 编程助手观测与优化平台
 # Docker Compose 部署配置
 # 版本: v2 格式，适用于 Docker Compose v1.27.0+ 和 Docker Desktop
+#
+# 使用方式：
+#   生产部署:  docker compose up -d
+#   开发模式:  docker compose --profile development up -d
+#   查看日志:  docker compose logs -f zhixu
+#   停止服务:  docker compose down
 
 services:
-  # 知墟 核心服务
+  # 知墟 核心服务（生产）
   zhixu:
     build:
       context: .
@@ -11,24 +17,35 @@ services:
     container_name: zhixu-core
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3001"       # 后端 API（前端开发服务器使用 npm run dev:client 独立运行）
     environment:
       - NODE_ENV=production
-      - PORT=3000
-      - LOG_LEVEL=info
+      - PORT=3001
+      - TZ=Asia/Shanghai
+      # 告警配置（可通过 .env 文件覆盖）
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - DINGTALK_WEBHOOK=${DINGTALK_WEBHOOK:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - ALERT_EMAIL=${ALERT_EMAIL:-}
     volumes:
-      - ./data:/app/data:rw
-      - ./logs:/app/logs:rw
+      - zhixu-data:/app/data:rw        # 持久化数据（事件/告警/规则）
+      - zhixu-logs:/app/logs:rw        # 日志目录
     networks:
       - zhixu-network
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    labels:
+      - "zhixu.acop=core"
+      - "zhixu.version=1.0.0"
 
-  # 知墟 开发服务器（可选，用于开发环境）
+  # 知墟 开发服务器
   zhixu-dev:
     build:
       context: .
@@ -38,24 +55,62 @@ services:
       - development
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3001"        # 后端 API
+      - "5173:5173"        # 前端 Vite
     environment:
       - NODE_ENV=development
-      - PORT=3000
+      - PORT=3001
+      - TZ=Asia/Shanghai
       - LOG_LEVEL=debug
     volumes:
-      - .:/app:rw
+      - .:/app:rw            # 源代码热重载
       - node_modules:/app/node_modules:rw
     networks:
       - zhixu-network
     command: npm run dev
+
+  # 知墟 仅前端开发（不启动后端，连接宿主机 3001）
+  zhixu-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: zhixu-frontend
+    profiles:
+      - frontend-only
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE=http://host.docker.internal:3001
+    volumes:
+      - ./src/client:/app/src/client:rw
+      - ./src/shared:/app/src/shared:rw
+      - node_modules:/app/node_modules:rw
+    networks:
+      - zhixu-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: npm run dev:client
 
 # 网络配置
 networks:
   zhixu-network:
     driver: bridge
 
-# 数据卷
+# 数据卷（持久化）
 volumes:
+  zhixu-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  zhixu-logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
   node_modules:
     driver: local

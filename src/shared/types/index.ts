@@ -375,3 +375,96 @@ export interface ContextHistoryEntry {
   };
 }
 
+// ============================================================
+// 安装向导 · Installer
+// ============================================================
+
+/** 单项环境信息（Node.js / npm / Git 等） */
+export interface EnvInfo {
+  name: string;           // 名称，如 Node.js
+  installed: boolean;     // 是否已安装
+  version?: string;       // 版本号
+  required: boolean;      // 是否必需
+  minimumVersion?: string;// 最低版本要求
+  path?: string;          // 可执行文件路径
+  downloadUrl?: string;   // 下载链接
+  detectedAt?: number;    // 检测时间戳
+}
+
+/** 环境检测汇总 */
+export interface EnvSummary {
+  node: EnvInfo;
+  npm: EnvInfo;
+  git: EnvInfo;
+  os: {
+    platform: string;     // win32 / darwin / linux
+    release: string;
+    totalMemoryMB: number;
+    nodeBinDir?: string;  // node 所在目录
+  };
+  allRequiredInstalled: boolean;  // 所有必需项是否已安装
+  detectedAt: number;
+}
+
+/** AI 软件检测信息 */
+export interface AiSoftwareInfo {
+  type: ToolType;         // 'trae' | 'claude_code' | 'cursor'
+  name: string;            // 显示名称，如 Trae
+  detected: boolean;       // 是否检测到已安装
+  logPath?: string;        // 检测到的日志路径
+  candidatePaths: string[]; // 候选默认路径
+  enabled: boolean;        // 用户是否选择接入
+  manualPath?: string;     // 用户手动输入的路径
+  lastModified?: number;   // 日志路径最后修改时间
+}
+
+/** 安装阶段 */
+export type InstallPhase =
+  | 'idle'           // 初始空闲
+  | 'checking_env'    // 环境检测
+  | 'env_checked'     // 环境检测完成
+  | 'selecting_software' // 软件选择
+  | 'software_selected' // 软件选择完成
+  | 'writing_config'  // 写入配置
+  | 'installing_deps' // 安装依赖
+  | 'starting_server' // 启动服务
+  | 'health_check'    // 健康检查
+  | 'running'         // 服务运行中
+  | 'completed'       // 完成
+  | 'failed';         // 失败
+
+/** 安装状态 */
+export interface InstallStatus {
+  phase: InstallPhase;
+  message: string;
+  progress: number;        // 0-100
+  logs: string[];          // 实时日志（最近 500 行）
+  startedAt?: number;
+  completedAt?: number;
+  error?: string;
+}
+
+/** 安装配置（用户提交到后端的配置） */
+export interface InstallConfig {
+  port: number;                       // 服务端口，默认 3001
+  frontendPort: number;               // 前端端口，默认 5173
+  aiSoftwares: Array<{
+    type: ToolType;
+    path: string;
+    enabled: boolean;
+    mode: 'auto' | 'manual';
+  }>;
+  theme: 'dark' | 'light';            // 主题
+  telemetryEnabled: boolean;          // 是否启用遥测（预留）
+}
+
+/** 安装完成后的系统信息 */
+export interface InstallCompleteInfo {
+  phase: InstallPhase;
+  serverUrl: string;
+  frontendUrl: string;
+  configPath: string;
+  aiSoftwares: Array<{ type: ToolType; name: string; path: string; enabled: boolean }>;
+  completedAt: number;
+}
+

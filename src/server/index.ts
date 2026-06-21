@@ -11,6 +11,7 @@ import { promptInjectionRoutes } from './routes/promptInjection';
 import { adapterRoutes } from './routes/adapters';
 import routerRoutes from './routes/router';
 import contextRoutes from './routes/context';
+import installerRoutes from './routes/installer';
 import { errorHandler } from './middleware/errorHandler';
 import { logger } from './services/logger';
 import { startScheduler, getSchedulerStatus, triggerManualScan } from './services/scheduler';
@@ -25,6 +26,7 @@ import * as aiCodeEventService from './services/aiCodeEventService';
 import * as alertService from './services/alertService';
 import * as ruleService from './services/ruleService';
 import * as promptInjectionService from './services/promptInjectionService';
+import { initDatabase, closeDatabase, saveDatabase } from './services/databaseService';
 
 config();
 
@@ -55,6 +57,7 @@ app.use('/api/prompt-injections', promptInjectionRoutes);
 app.use('/api/adapters', adapterRoutes);
 app.use('/api/router', routerRoutes);
 app.use('/api/context', contextRoutes);
+app.use('/api/installer', installerRoutes);
 
 // Scheduler API
 app.get('/api/scheduler/status', (_req, res) => {
@@ -75,6 +78,7 @@ app.use(errorHandler);
 
 // 启动前先初始化所有服务（确保 API 可用时数据已就绪）
 async function startup() {
+  await initDatabase(); // SQLite 数据库初始化（不可用时自动降级）
   await aiCodeEventService.loadFromStorage();
   await alertService.loadFromStorage();
   await ruleService.loadFromStorage();
@@ -89,6 +93,20 @@ async function startup() {
   await adapterService.loadConfigs();
   await adapterService.initializeAll();
 }
+
+// 优雅关闭
+process.on('SIGTERM', () => {
+  logger.info('收到 SIGTERM，正在保存数据...');
+  saveDatabase();
+  closeDatabase();
+  process.exit(0);
+});
+process.on('SIGINT', () => {
+  logger.info('收到 SIGINT，正在保存数据...');
+  saveDatabase();
+  closeDatabase();
+  process.exit(0);
+});
 
 // Start server
 startup().then(() => {

@@ -129,6 +129,7 @@ function Settings() {
     lastCollectTime: number; totalCollected: number; lastError?: string;
     health: { status: 'healthy' | 'degraded' | 'unhealthy'; error?: string };
     metrics: { totalEvents: number; totalTokens: number; avgLatency: number; errorCount: number };
+    isCollecting: boolean; collectingStart?: number;
   }>>([]);
   const [adapterLoading, setAdapterLoading] = useState(false);
   const [collecting, setCollecting] = useState(false);
@@ -317,6 +318,30 @@ function Settings() {
       loadAdapters();
     }
   }, [activeTab]);
+
+  // 实时轮询：每 2 秒刷新一次适配器扫描状态（仅在适配器 Tab 下且有适配器正在扫描时）
+  useEffect(() => {
+    if (activeTab !== 'adapters') return;
+    const anyCollecting = adapters.some(a => a.isCollecting);
+    if (!anyCollecting && adapters.length > 0) return; // 没有适配器在扫描，停止轮询
+
+    const pollTimer = setInterval(() => {
+      api.get('/api/adapters').then(res => {
+        if (res?.success) {
+          setAdapters(prev => {
+            const updated = res.data || [];
+            // 保持用户手动展开/输入状态（只更新 isCollecting + collectingStart）
+            return prev.map(a => {
+              const u = updated.find((u: any) => u.toolType === a.toolType);
+              return u ? { ...a, isCollecting: u.isCollecting, collectingStart: u.collectingStart, totalCollected: u.totalCollected } : a;
+            });
+          });
+        }
+      });
+    }, 2000);
+
+    return () => clearInterval(pollTimer);
+  }, [activeTab, adapters]);
 
   // 加载配置（启动时从 localStorage 读取并应用到 DOM / 后端）
   useEffect(() => {
@@ -1155,28 +1180,40 @@ function Settings() {
               {adapters.map((a) => (
                 <div key={a.toolType} className="alert-channel-card" style={{ padding: '1rem' }}>
                   <div className="alert-channel-header">
-                    <div>
-                      <h4 style={{ margin: 0, marginBottom: '0.25rem' }}>
-                        {a.toolType === 'trae' ? '🔷 ' : a.toolType === 'claude_code' ? '🟣 ' : '🟢 '}
-                        {a.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      {a.toolType === 'trae' ? '🔷 ' : a.toolType === 'claude_code' ? '🟣 ' : '🟢 '}
+                      <h4 style={{ margin: 0, marginBottom: '0.25rem' }}>{a.name}
                         <span style={{ marginLeft: '0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>v{a.version}</span>
                       </h4>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                        总采集: {a.totalCollected} 条 | token: {(a.metrics.totalTokens / 1000).toFixed(1)}k | 平均延迟: {Math.round(a.metrics.avgLatency)}ms
-                      </div>
+                      {a.isCollecting && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <div className="adapter-scan-spinner" />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--primary-color)' }}>
+                            扫描中{a.collectingStart ? ` · ${Math.round((Date.now() - a.collectingStart) / 1000)}s` : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <span className={`badge ${a.enabled ? 'badge-active' : 'badge-inactive'}`}>
-                      {a.enabled ? `● ${a.mode}` : '○ 已禁用'}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span className={`badge ${a.enabled ? 'badge-active' : 'badge-inactive'}`}>
+                        {a.enabled ? `● ${a.mode}` : '○ 已禁用'}
+                      </span>
+                    </div>
                   </div>
 
                   <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>总采集：</span>
+                      <span style={{ color: 'var(--primary-color)', fontWeight: 600 }}>{a.totalCollected} 条</span>
+                    </div>
+                    <div><span style={{ color: 'var(--text-secondary)' }}>Token：</span>
+                      {(a.metrics.totalTokens / 1000).toFixed(1)}k
+                    </div>
                     <div><span style={{ color: 'var(--text-secondary)' }}>健康状态：</span>
                       <span style={{ color: a.health.status === 'healthy' ? 'var(--success-color)' : a.health.status === 'degraded' ? '#f39c12' : 'var(--danger-color)' }}>
                         {a.health.status === 'healthy' ? '✅ 正常' : a.health.status === 'degraded' ? '⚠️ 降级' : '❌ 异常'}
                       </span>
                     </div>
-                    <div>
+                    <div style={{ gridColumn: 'span 2' }}>
                       <span style={{ color: 'var(--text-secondary)' }}>扫描目录：</span>
                       {a.detectedPath ? (
                         <code style={{ fontSize: '0.8rem' }}>{a.detectedPath}</code>

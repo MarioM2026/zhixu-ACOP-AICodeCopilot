@@ -1,52 +1,64 @@
-# 知墟 - AI 编程助手观测与优化平台 (ZhiXu - AI Code Copilot Observability Platform)
+# 知墟 - AI 编程助手观测与优化平台 (ZhiXu ACOP)
 # 生产构建 Dockerfile
+# 多阶段构建：前端构建 + TypeScript 编译 + 运行时
 
-FROM node:20-alpine AS builder
-WORKDIR /app
+# ============= 阶段 1: 前端构建 =============
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
 
-# 安装依赖
 COPY package*.json ./
-RUN npm ci --omit=dev=false || npm install
+RUN npm install
 
-# 复制源代码
-COPY . .
+COPY src/client/src ./src
+COPY src/client/index.html ./
+COPY src/client/vite.config.ts ./
+COPY src/client/tsconfig.json ./
+COPY src/shared ./src/shared
 
-# 构建客户端
-RUN npm run build:client || true
+RUN npm run build:client
 
-# 构建服务器（TypeScript 转 JavaScript）
-RUN npm install -g typescript
-
-# ===== 第二阶段：运行时 =====
-
-FROM node:20-alpine
+# ============= 阶段 2: TypeScript 编译 =============
+FROM node:20-alpine AS ts-compiler
 WORKDIR /app
-
-# 环境变量
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV HOST=0.0.0.0
-
-# 安装生产依赖
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm install
 
-# 复制构建产物
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/data ./data
-COPY --from=builder /app/config ./config
-COPY --from=builder /app/packages ./packages
-COPY --from=builder /app/scripts ./scripts
-
-# 复制源代码（服务器端需要运行时使用 tsx）
+COPY tsconfig.json ./
 COPY src ./src
 
+# 编译 TypeScript → JavaScript（服务器）
+RUN npx tsc -p tsconfig.server.json --outDir dist/server || \
+    npx esbuild src/server/index.ts --platform=node --bundle --outfile=dist/server/index.js --packages=external || true
+
+# ============= 阶段 3: 生产运行时 =============
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV HOST=0.0.0.0
+ENV TZ=Asia/Shanghai
+
+# 安装运行时依赖（不包含 devDependencies）
+COPY package*.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+
+# 复制前端构建产物
+COPY --from=frontend-builder /app/frontend/dist ./dist
+
+# 复制服务器源代码（使用 tsx 在运行时编译）
+COPY src ./src
+COPY tsconfig.json ./
+
+# 创建数据目录（volume 挂载点）
+RUN mkdir -p /app/data /app/logs
+
 # 暴露端口
-EXPOSE 3000
+EXPOSE 3001
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
-  CMD node -e "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+  CMD wget -qO- http://localhost:3001/api/health || exit 1
 
-# 启动命令
-CMD ["npm", "run", "start"]
+# 使用 tsx 运行（无需预编译，支持热重载）
+CMD ["npx", "tsx", "src/server/index.ts"]

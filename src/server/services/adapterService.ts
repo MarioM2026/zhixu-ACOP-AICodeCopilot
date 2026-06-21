@@ -49,6 +49,8 @@ interface AdapterRuntime {
   totalCollected: number;
   lastError?: string;
   lastEvents?: AICodeEvent[];
+  isCollecting: boolean;   // 是否正在扫描
+  collectingStart?: number; // 本次扫描开始时间
 }
 
 class AdapterService {
@@ -64,6 +66,7 @@ class AdapterService {
       adapter,
       lastCollectTime: 0,
       totalCollected: 0,
+      isCollecting: false,
     });
     logger.info(`Adapter registered: ${adapter.toolType}`, { name: adapter.config.name });
   }
@@ -105,8 +108,16 @@ class AdapterService {
   async collectAndRecord(): Promise<{ toolType: ToolType; count: number; error?: string }[]> {
     const results: { toolType: ToolType; count: number; error?: string }[] = [];
 
-    for (const [toolType, runtime] of this.registry.entries()) {
-      if (!runtime.adapter.config.enabled) continue;
+    // 并发执行所有适配器的数据采集（Promise.allSettled 避免单点失败影响全局）
+    const promises = Array.from(this.registry.entries()).map(async ([toolType, runtime]) => {
+      if (!runtime.adapter.config.enabled) {
+        return { toolType, count: 0 };
+      }
+
+      // 标记该适配器正在扫描
+      runtime.isCollecting = true;
+      runtime.collectingStart = Date.now();
+
       try {
         const events = await runtime.adapter.dataCollect();
         for (const evt of events) {
@@ -115,17 +126,25 @@ class AdapterService {
         runtime.lastCollectTime = Date.now();
         runtime.totalCollected += events.length;
         runtime.lastEvents = events.slice(-5);
-        results.push({ toolType, count: events.length });
+        runtime.lastError = undefined;
+
         if (events.length > 0) {
-          logger.info(`Collected ${events.length} events from ${toolType}`);
+          logger.info(`[Adapter:Collect] ${toolType}: +${events.length} events, total=${runtime.totalCollected}`);
         }
+        return { toolType, count: events.length };
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         runtime.lastError = msg;
-        logger.error(`Failed to collect events from ${toolType}`, { error: msg });
-        results.push({ toolType, count: 0, error: msg });
+        logger.error(`[Adapter:Collect] ${toolType} failed: ${msg}`);
+        return { toolType, count: 0, error: msg };
+      } finally {
+        runtime.isCollecting = false;
+        runtime.collectingStart = undefined;
       }
-    }
+    });
+
+    const settled = await Promise.all(promises);
+    settled.forEach(r => results.push(r));
     return results;
   }
 
@@ -164,12 +183,15 @@ class AdapterService {
     lastError?: string;
     health: AdapterHealth;
     metrics: AdapterMetrics;
+    isCollecting: boolean;    // 是否正在扫描
+    collectingStart?: number;  // 本次扫描开始时间（ms），用于前端显示扫描时长
   }>> {
     const result: Array<{
       toolType: ToolType; name: string; version: string; enabled: boolean; mode: string;
       logPath: string | null; detectedPath: string | null; candidatePaths: string[];
       lastCollectTime: number; totalCollected: number; lastError?: string;
       health: AdapterHealth; metrics: AdapterMetrics;
+      isCollecting: boolean; collectingStart?: number;
     }> = [];
 
     for (const [toolType, runtime] of this.registry.entries()) {
@@ -195,6 +217,8 @@ class AdapterService {
           lastError: runtime.lastError,
           health,
           metrics,
+          isCollecting: runtime.isCollecting,
+          collectingStart: runtime.collectingStart,
         });
       } catch (error) {
         logger.error(`Failed to get status for adapter ${toolType}`, { error: String(error) });
