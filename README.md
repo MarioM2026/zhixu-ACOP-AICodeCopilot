@@ -91,7 +91,7 @@ npm install
 # 启动后端（默认 http://localhost:3001）
 npm run dev:server
 
-# 启动前端（Vite，默认 http://localhost:5173）
+# 启动前端（Vite，默认 http://localhost:3000）
 npm run dev:client
 ```
 
@@ -99,8 +99,8 @@ npm run dev:client
 
 | 服务 | 地址 |
 |------|------|
-| 前端看板 | <http://localhost:5173> |
-| 管理看板 | <http://localhost:5173/dashboard> |
+| 前端看板 | <http://localhost:3000> |
+| 管理看板 | <http://localhost:3000/dashboard> |
 | 后端 API | <http://localhost:3001> |
 | 事件 API | <http://localhost:3001/api/events> |
 | 上下文 API | <http://localhost:3001/api/context/sessions> |
@@ -239,7 +239,7 @@ npm install
 # Backend (default: http://localhost:3001)
 npm run dev:server
 
-# Frontend (Vite, default: http://localhost:5173)
+# Frontend (Vite, default: http://localhost:3000)
 npm run dev:client
 ```
 
@@ -247,8 +247,8 @@ npm run dev:client
 
 | Service | URL |
 |---------|-----|
-| Frontend | <http://localhost:5173> |
-| Dashboard | <http://localhost:5173/dashboard> |
+| Frontend | <http://localhost:3000> |
+| Dashboard | <http://localhost:3000/dashboard> |
 | Backend API | <http://localhost:3001> |
 | Events API | <http://localhost:3001/api/events> |
 | Context API | <http://localhost:3001/api/context/sessions> |

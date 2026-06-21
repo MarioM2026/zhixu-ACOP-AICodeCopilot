@@ -55,7 +55,7 @@ start "ZhiXu-ACOP-Backend" /min cmd /c "npm run dev:server"
 timeout /t 3 /nobreak >nul
 
 :: ========== 4. Start Frontend ==========
-echo   [2/3] Starting Frontend Service (port 5173)...
+echo   [2/3] Starting Frontend Service (port 3000)...
 start "ZhiXu-ACOP-Frontend" /min cmd /c "npm run dev:client"
 timeout /t 6 /nobreak >nul
 
@@ -78,14 +78,14 @@ echo.
 echo [INFO] Showing browser selection dialog...
 echo.
 
-start "" "wscript.exe" "%~dp0选择浏览器.vbs" "http://localhost:5173"
+start "" "wscript.exe" "%~dp0选择浏览器.vbs" "http://localhost:3000"
 
 :: ========== 7. Done ==========
 echo ================================================
 echo  ZhiXu ACOP Started Successfully
 echo.
-echo  Frontend: http://localhost:5173
-echo  Dashboard: http://localhost:5173/dashboard
+echo  Frontend: http://localhost:3000
+echo  Dashboard: http://localhost:3000/dashboard
 echo  Backend API: http://localhost:3001
 echo.
 echo  Notes:
